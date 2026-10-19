@@ -1,0 +1,44 @@
+# ==============================================================================
+# SunAid-LoadPulse .gitignore for Git & Render Deployment
+# ==============================================================================
+
+# Firmware & Hardware sketches
+firmware/
+firmware
+SunAid_LoadPulse.ino/
+*.ino
+Arduino IDE/
+
+# Proof & Presentation Media
+Hackathon Proof/
+Hackathon Proof
+*Hackathon*Proof*
+
+# Wi-Fi Credentials & Secrets
+*wifi*
+*credential*
+*secret*
+*.env
+.env*
+*.key
+*.pem
+*.cert
+*.crt
+config.local.*
+
+# Python Bytecode & Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+venv/
+.venv/
+env/
+ENV/
+
+# System / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

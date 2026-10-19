@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SunAid–LoadPulse | Smart Solar Power Allocation</title>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <div class="nav-brand">
+      <div class="brand-icon">⚡</div>
+      <div class="brand-text">
+        <h1>SunAid–LoadPulse</h1>
+        <p class="tagline">Smart Solar Power Allocation &bull; Fluctuation-Aware Load Control</p>
+      </div>
+    </div>
+
+    <!-- Mode and Source Controls -->
+    <div class="nav-controls">
+      <!-- Hardware / Simulation Toggle -->
+      <div class="toggle-pill" id="simToggleGroup">
+        <label for="simModeToggle" class="pill-label">Simulation Mode</label>
+        <input type="checkbox" id="simModeToggle" checked>
+      </div>
+
+      <!-- Active Controller Switcher -->
+      <button class="mode-btn mode-loadpulse" id="btnModeToggle">
+        <span class="mode-indicator-dot"></span>
+        <span id="navModeText">LOADPULSE ACTIVE</span>
+      </button>
+
+      <!-- Hardware IP Config Modal Trigger / IP Display -->
+      <div class="ip-badge" id="ipBadge" title="ESP32 Target Address">
+        <span class="ip-icon">📶</span>
+        <span id="displayIp">Simulated</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Tabs -->
+  <main class="container">
+    <nav class="tab-bar">
+      <button class="tab-btn active" data-tab="tab-live">
+        <span class="tab-icon">📊</span> Live Telemetry &amp; Status
+      </button>
+      <button class="tab-btn" data-tab="tab-controls">
+        <span class="tab-icon">⚙️</span> Thresholds &amp; Delays
+      </button>
+      <button class="tab-btn" data-tab="tab-comparison">
+        <span class="tab-icon">⚖️</span> Baseline vs LoadPulse Comparison
+      </button>
+    </nav>
+
+    <!-- ========================================== -->
+    <!-- TAB 1: LIVE TELEMETRY & STATUS CARDS       -->
+    <!-- ========================================== -->
+    <section class="tab-content active" id="tab-live">
+      <!-- Top Status Notification Banner for Hardware connection error if any -->
+      <div id="statusAlert" class="alert-banner hidden"></div>
+
+      <!-- Key Performance Indicators (Cards) -->
+      <div class="cards-grid">
+        <!-- Essential Load Card (Priority 1) -->
+        <div class="card load-card" id="cardEssential">
+          <div class="card-header">
+            <span class="badge badge-priority1">PRIORITY 1</span>
+            <span class="pin-tag">GPIO 26</span>
+          </div>
+          <div class="card-body">
+            <div class="relay-light" id="lightEssential"></div>
+            <div class="card-metric-group">
+              <span class="metric-label">Essential Load LED</span>
+              <span class="metric-value status-text" id="statusEssential">OFF</span>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span>Critical circuits &bull; Shed last</span>
+          </div>
+        </div>
+
+        <!-- Optional Load Card (Priority 2) -->
+        <div class="card load-card" id="cardOptional">
+          <div class="card-header">
+            <span class="badge badge-priority2">PRIORITY 2</span>
+            <span class="pin-tag">GPIO 27</span>
+          </div>
+          <div class="card-body">
+            <div class="relay-light" id="lightOptional"></div>
+            <div class="card-metric-group">
+              <span class="metric-label">Optional Load LED</span>
+              <span class="metric-value status-text" id="statusOptional">OFF</span>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span>Secondary circuits &bull; Shed first</span>
+          </div>
+        </div>
+
+        <!-- Power & Electrical Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="badge badge-solar">INA219 SENSOR</span>
+            <span class="pin-tag">I2C 0x40</span>
+          </div>
+          <div class="card-body">
+            <div class="card-metric-group">
+              <span class="metric-label">Available Solar Power</span>
+              <div class="power-display">
+                <span class="metric-value large-value" id="valPower">0.0</span>
+                <span class="metric-unit">mW</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer sub-metrics">
+            <span>Voltage: <strong id="valVoltage">0.00 V</strong></span>
+            <span>Current: <strong id="valCurrent">0.0 mA</strong></span>
+          </div>
+        </div>
+
+        <!-- Stability & Uptime Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="badge badge-metrics">METRICS</span>
+            <span class="pin-tag" id="valModeTag">LOADPULSE</span>
+          </div>
+          <div class="card-body">
+            <div class="card-metric-group">
+              <span class="metric-label">Essential Uptime</span>
+              <div class="power-display">
+                <span class="metric-value large-value text-emerald" id="valUptimePct">0.0</span>
+                <span class="metric-unit">%</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer sub-metrics">
+            <span>Total Switches: <strong id="valSwitchTotal" class="text-amber">0</strong></span>
+            <span>Ess Switches: <strong id="valSwitchEss">0</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Charts Grid -->
+      <div class="charts-grid">
+        <!-- Main Solar Power & Voltage Chart -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">
+              <h3>Live Solar Power &amp; Voltage</h3>
+              <p>Rolling 200 ms telemetry with moving-average filter and configured threshold bands</p>
+            </div>
+            <div class="chart-legend-custom">
+              <span class="legend-chip"><span class="dot power-dot"></span> Power (mW)</span>
+              <span class="legend-chip"><span class="dot voltage-dot"></span> Voltage (V)</span>
+              <span class="legend-chip"><span class="dot threshold-dot"></span> Shed / Restore Bands</span>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="livePowerChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Relay State Timeline Chart -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">
+              <h3>Relay Switching Timeline</h3>
+              <p>Real-time physical contact states for Priority 1 (Essential) and Priority 2 (Optional) loads</p>
+            </div>
+            <div class="chart-legend-custom">
+              <span class="legend-chip"><span class="dot ess-dot"></span> Essential Relay (GPIO 26)</span>
+              <span class="legend-chip"><span class="dot opt-dot"></span> Optional Relay (GPIO 27)</span>
+            </div>
+          </div>
+          <div class="chart-container-relay">
+            <canvas id="relayTimelineChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: THRESHOLD & DELAY CONTROLS          -->
+    <!-- ========================================== -->
+    <section class="tab-content" id="tab-controls">
+      <div class="controls-wrapper">
+        <div class="controls-card">
+          <div class="section-heading">
+            <h2>LoadPulse Dynamic Configuration</h2>
+            <p>Adjust hysteresis power thresholds and confirmation timers in real-time. Changes are applied immediately to firmware or simulator.</p>
+          </div>
+
+          <form id="configForm" onsubmit="return false;">
+            <!-- Controller Mode Radio Selector -->
+            <div class="control-group">
+              <label class="group-title">Active Algorithm</label>
+              <div class="radio-cards">
+                <label class="radio-card">
+                  <input type="radio" name="controller_mode" value="LOADPULSE" checked>
+                  <div class="radio-card-body">
+                    <span class="radio-name">Controller B: LoadPulse</span>
+                    <span class="radio-desc">Priority shedding, dual hysteresis bands, shortage confirmation, and relay dwell time.</span>
+                  </div>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="controller_mode" value="BASELINE">
+                  <div class="radio-card-body">
+                    <span class="radio-name">Controller A: Baseline</span>
+                    <span class="radio-desc">Instantaneous single threshold without delay. Prone to relay chatter during fluctuations.</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Optional Load Thresholds (Priority 2) -->
+            <div class="sliders-section">
+              <h3>Optional Load Power Thresholds (Priority 2, GPIO 27)</h3>
+              <div class="slider-row">
+                <div class="slider-info">
+                  <label for="lp_opt_off">Shed Threshold (P_OPT_OFF)</label>
+                  <span class="slider-help">Shed optional load when power drops below this level for 3s</span>
+                </div>
+                <div class="slider-input-wrap">
+                  <input type="range" id="lp_opt_off" min="50" max="350" step="5" value="180">
+                  <span class="slider-val"><span id="val_lp_opt_off">180</span> mW</span>
+                </div>
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-info">
+                  <label for="lp_opt_on">Restore Threshold (P_OPT_ON)</label>
+                  <span class="slider-help">Restore optional load only after power recovers above this level for 5s</span>
+                </div>
+                <div class="slider-input-wrap">
+                  <input type="range" id="lp_opt_on" min="60" max="400" step="5" value="210">
+                  <span class="slider-val"><span id="val_lp_opt_on">210</span> mW</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Essential Load Thresholds (Priority 1) -->
+            <div class="sliders-section">
+              <h3>Essential Load Power Thresholds (Priority 1, GPIO 26)</h3>
+              <div class="slider-row">
+                <div class="slider-info">
+                  <label for="lp_ess_off">Critical Shed Threshold (P_ESS_OFF)</label>
+                  <span class="slider-help">Cut essential load only under severe sustained power deficit</span>
+                </div>
+                <div class="slider-input-wrap">
+                  <input type="range" id="lp_ess_off" min="20" max="250" step="5" value="90">
+                  <span class="slider-val"><span id="val_lp_ess_off">90</span> mW</span>
+                </div>
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-info">
+                  <label for="lp_ess_on">Restore Threshold (P_ESS_ON)</label>
+                  <span class="slider-help">Re-engage essential load when solar power returns</span>
+                </div>
+                <div class="slider-input-wrap">
+                  <input type="range" id="lp_ess_on" min="30" max="300" step="5" value="120">
+                  <span class="slider-val"><span id="val_lp_ess_on">120</span> mW</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Anti-Chatter Timing & Stability Delays -->
+            <div class="sliders-section">
+              <h3>Fluctuation-Aware Timing Parameters</h3>
+              <div class="slider-row">
+                <div class="slider-info">
+                  <label for="shortage_delay_ms">Shortage Confirmation Delay</label>
+                  <span class="slider-help">Filters out brief shadow dips (e.g. tree leaves, passing birds)</span>
+                </div>
+                <div class="slider-input-wrap">
+                  <input type="range" id="shortage_delay_ms" min="500" max="10000" step="500" value="3000">
+                  <span class="slider-val"><span id="val_shortage_delay_ms">3000</span> ms</span>
+                </div>
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-info">
+                  <label for="recovery_delay_ms">Recovery Stability Delay</label>
+                  <span class="slider-help">Guarantees solar irradiance has stabilized before reconnecting loads</span>
+                </div>
+                <div class="slider-input-wrap">
+                  <input type="range" id="recovery_delay_ms" min="1000" max="15000" step="500" value="5000">
+                  <span class="slider-val"><span id="val_recovery_delay_ms">5000</span> ms</span>
+                </div>
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-info">
+                  <label for="min_dwell_ms">Minimum Relay Dwell Time</label>
+                  <span class="slider-help">Prevents mechanical relay contact wear &amp; arcing</span>
+                </div>
+                <div class="slider-input-wrap">
+                  <input type="range" id="min_dwell_ms" min="500" max="5000" step="250" value="2000">
+                  <span class="slider-val"><span id="val_min_dwell_ms">2000</span> ms</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="form-actions">
+              <button class="btn btn-primary" id="btnSaveConfig">
+                <span>💾 Apply Configuration</span>
+              </button>
+              <button class="btn btn-secondary" id="btnResetMetrics">
+                <span>🔄 Reset Counters &amp; Timers</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Hardware & Simulation Setup Card -->
+        <div class="controls-card side-card">
+          <div class="section-heading">
+            <h2>Hardware Connection</h2>
+            <p>Connect to live ESP32 over Wi-Fi, or test scenarios using the built-in simulator.</p>
+          </div>
+
+          <div class="hw-input-group">
+            <label for="inputEspIp">ESP32 IP Address</label>
+            <div class="input-with-button">
+              <input type="text" id="inputEspIp" placeholder="e.g. 192.168.1.100" value="192.168.1.100">
+              <button class="btn btn-outline" id="btnSaveIp">Set IP</button>
+            </div>
+            <p class="hw-help">Find IP in Arduino Serial Monitor at 115200 baud on startup.</p>
+          </div>
+
+          <hr class="divider">
+
+          <div class="section-heading">
+            <h2>Solar Simulation Scenarios</h2>
+            <p>Select realistic solar irradiance profiles to test controller resilience without sunlight:</p>
+          </div>
+
+          <div class="profile-selector">
+            <button class="profile-btn active" data-profile="flickering_shade">
+              <strong>🍃 Flickering Shade</strong>
+              <small>Wind-blown foliage hovering at threshold limit</small>
+            </button>
+            <button class="profile-btn" data-profile="passing_clouds">
+              <strong>☁️ Passing Clouds</strong>
+              <small>Transient 10-15s heavy cloud cover</small>
+            </button>
+            <button class="profile-btn" data-profile="sunset_ramp_down">
+              <strong>🌅 Sunset Ramp-Down</strong>
+              <small>Orderly priority load shedding to zero</small>
+            </button>
+            <button class="profile-btn" data-profile="clear_sky">
+              <strong>☀️ Clear Sky</strong>
+              <small>Stable bell curve with slight solar thermal drift</small>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: BASELINE VS LOADPULSE COMPARISON    -->
+    <!-- ========================================== -->
+    <section class="tab-content" id="tab-comparison">
+      <div class="comparison-header">
+        <div class="comp-title">
+          <h2>Measured Performance Comparison</h2>
+          <p>Side-by-side evaluation of Controller A (Baseline Single-Threshold) vs Controller B (SunAid-LoadPulse) under identical solar irradiance profiles.</p>
+        </div>
+        <div class="comp-actions">
+          <select id="selectCompareProfile" class="custom-select">
+            <option value="flickering_shade">Profile: Flickering Shade (Leaf Flutter)</option>
+            <option value="passing_clouds">Profile: Passing Clouds</option>
+            <option value="sunset_ramp_down">Profile: Sunset Ramp-Down</option>
+            <option value="clear_sky">Profile: Clear Sky</option>
+          </select>
+          <button class="btn btn-primary" id="btnRunBenchmark">
+            <span>⚡ Run Side-by-Side Benchmark</span>
+          </button>
+          <a class="btn btn-outline" id="btnExportCsv" href="/api/export_csv?profile=flickering_shade">
+            <span>📥 Export Results as CSV</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Comparative Stat Cards -->
+      <div class="comp-summary-grid">
+        <div class="summary-card">
+          <span class="sum-label">Baseline Switch Count</span>
+          <span class="sum-value text-red" id="compBaselineSwitches">--</span>
+          <span class="sum-sub">Rapid relay chatter &amp; mechanical wear</span>
+        </div>
+        <div class="summary-card">
+          <span class="sum-label">LoadPulse Switch Count</span>
+          <span class="sum-value text-emerald" id="compLoadPulseSwitches">--</span>
+          <span class="sum-sub">Smooth, deliberate load control</span>
+        </div>
+        <div class="summary-card highlight-card">
+          <span class="sum-label">Relay Chatter Reduction</span>
+          <span class="sum-value text-amber" id="compReductionPct">--%</span>
+          <span class="sum-sub">Fewer cycles preserves relay lifespan</span>
+        </div>
+        <div class="summary-card">
+          <span class="sum-label">Essential Load Uptime</span>
+          <span class="sum-value text-sky" id="compUptimePct">--%</span>
+          <span class="sum-sub">Critical equipment protected from dips</span>
+        </div>
+      </div>
+
+      <!-- Comparison Charts -->
+      <div class="comp-charts-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">
+              <h3>Relay Switch Event Count (Lower is Better)</h3>
+              <p>Baseline rapidly cycles on micro-dips; LoadPulse filters high-frequency noise</p>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="compSwitchChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">
+              <h3>Essential &amp; Optional Load Uptime % (Higher is Better)</h3>
+              <p>LoadPulse keeps essential circuits running without spurious disconnection</p>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="compUptimeChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-content">
+      <p>SunAid–LoadPulse &bull; Smart Solar Power Allocation with Fluctuation-Aware Load Control</p>
+      <p class="footer-sub">ESP32 DevKit V1 &bull; INA219 High-Side Power Sensor &bull; Dual-Channel Relay Priority Engine</p>
+    </div>
+  </footer>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
